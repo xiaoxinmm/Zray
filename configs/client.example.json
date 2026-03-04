@@ -1,0 +1,9 @@
+{
+    "smart_port": "127.0.0.1:1080",
+    "global_port": "127.0.0.1:1081",
+    "remote_host": "your-server-ip",
+    "remote_port": 64433,
+    "user_hash": "1234567890abcdef",
+    "enable_tfo": false,
+    "geosite_path": "rules/geosite-cn.txt"
+}

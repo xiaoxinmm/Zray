@@ -1,0 +1,230 @@
+# ZRay GeoSite 分流规则
+# 格式: 每行一个域名/后缀，[section] 标记分类
+# [cn] = 直连  [proxy/gfw] = 走代理
+
+[cn]
+# === 搜索引擎 ===
+baidu.com
+sogou.com
+so.com
+sm.cn
+bing.com
+
+# === 社交/通讯 ===
+qq.com
+weixin.qq.com
+wx.qq.com
+wechat.com
+weibo.com
+sina.com.cn
+douban.com
+zhihu.com
+xiaohongshu.com
+tieba.baidu.com
+
+# === 电商 ===
+taobao.com
+tmall.com
+jd.com
+pinduoduo.com
+alibaba.com
+1688.com
+alipay.com
+meituan.com
+dianping.com
+ele.me
+ctrip.com
+suning.com
+
+# === 视频/音乐 ===
+bilibili.com
+youku.com
+iqiyi.com
+v.qq.com
+douyin.com
+kuaishou.com
+music.163.com
+kugou.com
+kuwo.cn
+ximalaya.com
+
+# === 新闻/媒体 ===
+sohu.com
+163.com
+ifeng.com
+thepaper.cn
+toutiao.com
+36kr.com
+huxiu.com
+
+# === 技术/开发 ===
+csdn.net
+cnblogs.com
+jianshu.com
+segmentfault.com
+gitee.com
+oschina.net
+juejin.cn
+v2ex.com
+
+# === 云服务/CDN ===
+aliyun.com
+aliyuncs.com
+alicdn.com
+tencent.com
+qcloud.com
+myqcloud.com
+tencentcloudapi.com
+baidubce.com
+bdimg.com
+bdstatic.com
+huaweicloud.com
+volcengine.com
+byteimg.com
+pstatp.com
+snssdk.com
+bytedance.com
+upyun.com
+ucloud.cn
+ksyun.com
+qiniu.com
+qiniucdn.com
+
+# === 支付 ===
+unionpay.com
+95516.com
+
+# === 物流 ===
+sf-express.com
+zto.com
+yto.net.cn
+sto.cn
+yunda.com
+
+# === 政府/教育 ===
+gov.cn
+edu.cn
+12306.cn
+miit.gov.cn
+
+# === 游戏 ===
+163.com
+netease.com
+mihoyo.com
+miyoushe.com
+
+# === 工具 ===
+amap.com
+autonavi.com
+map.baidu.com
+weather.com.cn
+ip.cn
+ip.sb
+chinaz.com
+tool.lu
+
+# === 国内 TLD ===
+cn
+com.cn
+net.cn
+org.cn
+中国
+中國
+公司
+网络
+
+[proxy]
+# === Google ===
+google.com
+google.com.hk
+googleapis.com
+googlevideo.com
+googleusercontent.com
+gstatic.com
+ggpht.com
+gmail.com
+youtube.com
+ytimg.com
+youtu.be
+
+# === Meta ===
+facebook.com
+fbcdn.net
+instagram.com
+whatsapp.com
+whatsapp.net
+messenger.com
+
+# === Twitter/X ===
+twitter.com
+x.com
+twimg.com
+t.co
+
+# === AI ===
+openai.com
+chatgpt.com
+anthropic.com
+claude.ai
+bard.google.com
+gemini.google.com
+
+# === 开发 ===
+github.com
+githubusercontent.com
+github.io
+gitlab.com
+stackoverflow.com
+stackexchange.com
+npmjs.org
+npmjs.com
+docker.com
+docker.io
+
+# === 媒体 ===
+wikipedia.org
+wikimedia.org
+medium.com
+reddit.com
+redditstatic.com
+quora.com
+
+# === 通讯 ===
+telegram.org
+telegram.me
+t.me
+discord.com
+discord.gg
+discordapp.com
+signal.org
+line.me
+
+# === 流媒体 ===
+netflix.com
+nflxvideo.net
+spotify.com
+twitch.tv
+hulu.com
+disneyplus.com
+hbo.com
+primevideo.com
+
+# === 云服务 ===
+aws.amazon.com
+amazonaws.com
+azure.microsoft.com
+cloudflare.com
+fastly.net
+akamai.net
+
+# === 其他常用 ===
+apple.com
+icloud.com
+microsoft.com
+live.com
+outlook.com
+office.com
+amazon.com
+dropbox.com
+mega.nz
+protonmail.com

@@ -1,0 +1,203 @@
+package main
+
+import (
+	"bufio"
+	"context"
+	"crypto/tls"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"math"
+	"net"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/xiaoxinmm/Zray/pkg/camo"
+	"github.com/xiaoxinmm/Zray/pkg/protocol"
+)
+
+type Config struct {
+	RemotePort int    `json:"remote_port"`
+	UserHash   string `json:"user_hash"`
+	CertFile   string `json:"cert_file"`
+	KeyFile    string `json:"key_file"`
+	EnableTFO  bool   `json:"enable_tfo"`
+}
+
+var (
+	config     Config
+	nonceCache sync.Map
+)
+
+func init() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+	log.SetOutput(os.Stdout)
+	go cleanNonceCache()
+}
+
+func cleanNonceCache() {
+	ticker := time.NewTicker(1 * time.Minute)
+	for range ticker.C {
+		now := time.Now().Unix()
+		nonceCache.Range(func(key, value interface{}) bool {
+			if now-value.(int64) > 60 {
+				nonceCache.Delete(key)
+			}
+			return true
+		})
+	}
+}
+
+func main() {
+	if err := loadConfig("config.json"); err != nil {
+		log.Fatalf("[FATAL] 加载配置失败: %v", err)
+	}
+
+	cert, err := tls.LoadX509KeyPair(config.CertFile, config.KeyFile)
+	if err != nil {
+		log.Fatalf("[FATAL] 证书加载失败: %v", err)
+	}
+
+	tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
+
+	log.Println("==================================================")
+	log.Println("           ZRay Server v2.0                       ")
+	log.Println("==================================================")
+	log.Printf("[INFO] 监听端口: %d", config.RemotePort)
+	log.Printf("[INFO] TFO: %v", config.EnableTFO)
+	log.Println("--------------------------------------------------")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+		<-sig
+		log.Println("[INFO] 收到退出信号，正在关闭...")
+		cancel()
+	}()
+
+	startListener(ctx, tlsConfig)
+}
+
+func startListener(ctx context.Context, tlsConfig *tls.Config) {
+	lc := net.ListenConfig{}
+	if config.EnableTFO {
+		lc.Control = func(network, address string, c syscall.RawConn) error {
+			return c.Control(func(fd uintptr) {
+				syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, 23, 4096)
+			})
+		}
+	}
+
+	ln, err := lc.Listen(ctx, "tcp", fmt.Sprintf(":%d", config.RemotePort))
+	if err != nil {
+		log.Fatalf("[FATAL] 监听失败: %v", err)
+	}
+	defer ln.Close()
+
+	tlsLn := tls.NewListener(ln, tlsConfig)
+	log.Printf("[INFO] 服务启动成功，等待连接...")
+
+	go func() {
+		<-ctx.Done()
+		ln.Close()
+	}()
+
+	for {
+		conn, err := tlsLn.Accept()
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				log.Printf("[WARN] Accept: %v", err)
+				continue
+			}
+		}
+		go handleConnection(conn)
+	}
+}
+
+func handleConnection(conn net.Conn) {
+	defer conn.Close()
+	addr := conn.RemoteAddr().String()
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	br := bufio.NewReader(conn)
+
+	// Strip HTTP camouflage
+	if err := camo.StripHTTPCamo(br); err != nil {
+		return
+	}
+
+	// Parse protocol header
+	hdr, err := protocol.ParseHeader(br, config.UserHash, 30)
+	if err != nil {
+		log.Printf("[SEC] %s: %v", addr, err)
+		return
+	}
+
+	// Check nonce replay
+	if _, loaded := nonceCache.LoadOrStore(hdr.Nonce, hdr.Time); loaded {
+		log.Printf("[SEC] 重放攻击: %s", addr)
+		return
+	}
+
+	conn.SetReadDeadline(time.Time{})
+	log.Printf("[AUTH] 验证通过: %s", addr)
+
+	// Read padding
+	padBuf := make([]byte, 1)
+	if _, err := io.ReadFull(br, padBuf); err != nil {
+		return
+	}
+	if padBuf[0] > 0 {
+		io.ReadFull(br, make([]byte, padBuf[0]))
+	}
+
+	// Read command
+	cmdBuf := make([]byte, 1)
+	if _, err := io.ReadFull(br, cmdBuf); err != nil {
+		return
+	}
+
+	if cmdBuf[0] == protocol.CmdConnect {
+		handleTCP(conn, br, addr)
+	}
+}
+
+func handleTCP(clientConn net.Conn, r io.Reader, clientAddr string) {
+	targetAddr, err := protocol.ReadAddress(r)
+	if err != nil {
+		log.Printf("[ERR] 解析目标失败: %v", err)
+		return
+	}
+	log.Printf("[PROXY] %s -> %s", clientAddr, targetAddr)
+
+	targetConn, err := net.DialTimeout("tcp", targetAddr, 10*time.Second)
+	if err != nil {
+		log.Printf("[ERR] 连接失败: %s -> %v", targetAddr, err)
+		return
+	}
+	defer targetConn.Close()
+
+	done := make(chan struct{}, 2)
+	go func() { io.Copy(targetConn, r); done <- struct{}{} }()
+	go func() { io.Copy(clientConn, targetConn); done <- struct{}{} }()
+	<-done
+}
+
+func loadConfig(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return json.NewDecoder(f).Decode(&config)
+}
