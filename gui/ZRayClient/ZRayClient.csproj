@@ -3,8 +3,8 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
     <AssemblyName>ZRay</AssemblyName>
-    <ApplicationIcon>icon.ico</ApplicationIcon>
     <Version>2.1.0</Version>
   </PropertyGroup>
 </Project>
