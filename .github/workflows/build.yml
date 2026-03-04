@@ -9,54 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-cli:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
-          - goos: windows
-            goarch: amd64
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: Build server
-        if: matrix.goos == 'linux'
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          go build -ldflags="-s -w" -o build/zray-server-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/zray-server/
-          cd build && tar czf zray-server-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz zray-server-*
-
-      - name: Build client
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          EXT=""
-          [ "${{ matrix.goos }}" = "windows" ] && EXT=".exe"
-          go build -ldflags="-s -w" -o build/zray-client-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} ./cmd/zray-client/
-          cd build && tar czf zray-client-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz zray-client-*
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: build/*.tar.gz
-
-  build-windows-gui:
+  build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,16 +17,48 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Build Windows GUI
+      - name: Tidy modules
+        run: go mod tidy
+
+      - name: Build Windows CLI client
         run: |
-          go build -ldflags="-s -w -H windowsgui" -o build/zray-gui-windows-amd64.exe ./cmd/zray-gui/
+          go build -ldflags="-s -w" -o build/zray-client.exe ./cmd/zray-client/
         env:
           CGO_ENABLED: 0
+          GOOS: windows
+          GOARCH: amd64
+
+      - name: Build Windows GUI client
+        run: |
+          go build -ldflags="-s -w -H windowsgui" -o build/zray-gui.exe ./cmd/zray-gui/
+        env:
+          CGO_ENABLED: 0
+          GOOS: windows
+          GOARCH: amd64
+
+      - name: Build Windows Server
+        run: |
+          go build -ldflags="-s -w" -o build/zray-server.exe ./cmd/zray-server/
+        env:
+          CGO_ENABLED: 0
+          GOOS: windows
+          GOARCH: amd64
+
+      - name: Package
+        run: |
+          cd build
+          copy ..\configs\client.example.json config.json
+          copy ..\rules\geosite-cn.txt geosite-cn.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-gui
-          path: build/zray-gui-windows-amd64.exe
+          name: windows
+          path: |
+            build/zray-client.exe
+            build/zray-gui.exe
+            build/zray-server.exe
+            build/config.json
+            build/geosite-cn.txt
 
   build-android:
     runs-on: ubuntu-latest
@@ -83,11 +68,8 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        id: setup-ndk
-        with:
-          ndk-version: r26d
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -99,31 +81,23 @@ jobs:
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
           go install golang.org/x/mobile/cmd/gobind@latest
+          export PATH=$PATH:$(go env GOPATH)/bin
           gomobile init
 
       - name: Build Android AAR
         run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
           cd android/zraylib
-          gomobile bind -target=android -androidapi 21 -o ../../build/zraylib.aar .
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-
-      - name: Build Android APK
-        run: |
-          cd android/app
-          chmod +x gradlew
-          ./gradlew assembleRelease
-          cp app/build/outputs/apk/release/app-release-unsigned.apk ../../build/zray-android.apk
+          go mod tidy
+          gomobile bind -target=android/arm64 -androidapi 24 -o ../../build/zraylib.aar .
 
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: |
-            build/zraylib.aar
-            build/zray-android.apk
+          path: build/zraylib.aar
 
   release:
-    needs: [build-cli, build-windows-gui, build-android]
+    needs: [build-windows, build-android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -131,12 +105,15 @@ jobs:
         with:
           path: artifacts
 
+      - name: Package Windows
+        run: |
+          cd artifacts/windows
+          zip -r ../../ZRay-Windows-v${{ github.ref_name }}.zip .
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/**/*.tar.gz
-            artifacts/**/*.exe
-            artifacts/**/*.apk
-            artifacts/**/*.aar
+            ZRay-Windows-*.zip
+            artifacts/android/zraylib.aar
           generate_release_notes: true
