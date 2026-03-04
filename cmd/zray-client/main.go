@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"runtime"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -229,7 +230,7 @@ func dialServer() (net.Conn, error) {
 		Timeout:   10 * time.Second,
 		KeepAlive: 30 * time.Second,
 	}
-	if config.EnableTFO {
+	if config.EnableTFO && runtime.GOOS == "linux" {
 		dialer.Control = func(network, address string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
 				syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, 30, 1)

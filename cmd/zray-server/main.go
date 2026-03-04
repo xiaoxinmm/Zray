@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -87,7 +87,7 @@ func main() {
 
 func startListener(ctx context.Context, tlsConfig *tls.Config) {
 	lc := net.ListenConfig{}
-	if config.EnableTFO {
+	if config.EnableTFO && runtime.GOOS == "linux" {
 		lc.Control = func(network, address string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
 				syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, 23, 4096)

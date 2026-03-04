@@ -1,6 +1,6 @@
 module github.com/xiaoxinmm/Zray
 
-go 1.22
+go 1.24
 
 require github.com/refraction-networking/utls v1.8.2
 
