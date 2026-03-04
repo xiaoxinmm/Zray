@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -14,6 +15,7 @@ import (
 
 	utls "github.com/refraction-networking/utls"
 	"github.com/xiaoxinmm/Zray/pkg/camo"
+	"github.com/xiaoxinmm/Zray/pkg/link"
 	"github.com/xiaoxinmm/Zray/pkg/protocol"
 	"github.com/xiaoxinmm/Zray/pkg/proxy"
 	"github.com/xiaoxinmm/Zray/pkg/routing"
@@ -51,10 +53,32 @@ var (
 )
 
 func main() {
+	linkFlag := flag.String("link", "", "ZA:// 加密链接导入配置")
+	linkKey := flag.String("key", "", "ZA 链接解密密钥 (默认内置)")
+	flag.Parse()
+
 	setupLogFile()
-	if err := loadConfig(); err != nil {
-		fmt.Printf("%s[FATAL] 加载配置失败: %v%s\n", ColorRed, err, ColorReset)
-		os.Exit(1)
+
+	// 如果提供了 ZA 链接，解析并写入配置
+	if *linkFlag != "" {
+		lc, err := link.Parse(*linkFlag, *linkKey)
+		if err != nil {
+			fmt.Printf("%s[FATAL] ZA 链接解析失败: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
+		}
+		config.RemoteHost = lc.Host
+		config.RemotePort = lc.Port
+		config.UserHash = lc.UserHash
+		config.SmartPort = fmt.Sprintf("127.0.0.1:%d", lc.SmartPort)
+		config.GlobalPort = fmt.Sprintf("127.0.0.1:%d", lc.GlobalPort)
+		config.EnableTFO = lc.TFO
+		config.GeositePath = "rules/geosite-cn.txt"
+		fmt.Printf("%s[INFO] ZA 链接导入成功: %s:%d%s\n", ColorGreen, lc.Host, lc.Port, ColorReset)
+	} else {
+		if err := loadConfig(); err != nil {
+			fmt.Printf("%s[FATAL] 加载配置失败: %v%s\n", ColorRed, err, ColorReset)
+			os.Exit(1)
+		}
 	}
 
 	// 初始化分流路由

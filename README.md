@@ -91,6 +91,32 @@ curl -sL https://ghproxy.cc/https://raw.githubusercontent.com/xiaoxinmm/Zray/mai
   └─ 默认 → 代理（假定为境外）
 ```
 
+## ZA 加密链接
+
+ZRay 支持 `ZA://` 加密分享链接，一键导入配置。链接内容经 AES-256-GCM 加密，Base26 编码（纯大写字母，无数字），外观完全不可读。
+
+**示例：**
+```
+ZA://BHMKQXRTLPWSNFGHCDEVJOUYZIABCMKQ...
+```
+
+**服务端** 启动后自动生成并打印 ZA 链接：
+```
+[LINK] ZA 分享链接:
+[LINK] ZA://BHMKQXRTLPWSNFGHCDEVJOUYZI...
+```
+
+**客户端** 通过链接一键导入：
+```bash
+# 命令行
+./zray-client --link "ZA://BHMKQXRT..."
+
+# 自定义解密密钥
+./zray-client --link "ZA://BHMKQXRT..." --key "mypassword"
+```
+
+**GUI 客户端** 直接在界面粘贴链接导入。
+
 ## 编译
 
 ```bash

@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/xiaoxinmm/Zray/pkg/camo"
+	"github.com/xiaoxinmm/Zray/pkg/link"
 	"github.com/xiaoxinmm/Zray/pkg/protocol"
 )
 
@@ -64,10 +66,26 @@ func main() {
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
 
 	log.Println("==================================================")
-	log.Println("           ZRay Server v2.0                       ")
+	log.Println("           ZRay Server v2.1                       ")
 	log.Println("==================================================")
 	log.Printf("[INFO] 监听端口: %d", config.RemotePort)
 	log.Printf("[INFO] TFO: %v", config.EnableTFO)
+
+	// 生成 ZA 链接
+	publicIP := getPublicIP()
+	if publicIP != "" {
+		lc := &link.LinkConfig{
+			Host:     publicIP,
+			Port:     config.RemotePort,
+			UserHash: config.UserHash,
+		}
+		zaLink, err := link.Generate(lc, "")
+		if err == nil {
+			log.Println("--------------------------------------------------")
+			log.Printf("[LINK] ZA 分享链接:")
+			log.Printf("[LINK] %s", zaLink)
+		}
+	}
 	log.Println("--------------------------------------------------")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -195,4 +213,17 @@ func loadConfig(path string) error {
 	}
 	defer f.Close()
 	return json.NewDecoder(f).Decode(&config)
+}
+
+func getPublicIP() string {
+	resp, err := http.Get("https://ifconfig.me")
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ""
+	}
+	return string(body)
 }

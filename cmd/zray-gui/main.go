@@ -8,6 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
+
+	"github.com/xiaoxinmm/Zray/pkg/link"
 	"sync/atomic"
 	"time"
 )
@@ -91,6 +94,11 @@ h1 span{color:#e94560}
 <span class="label">服务器:</span> %s:%d<br>
 <span class="label">TFO:</span> %v
 </div>
+<div class="info" style="margin-top:16px">
+<span class="label">ZA 链接导入:</span><br>
+<input id="zalink" type="text" placeholder="ZA://ABCXYZ..." style="width:95%%;padding:8px;margin:8px 0;background:#0a1128;border:1px solid #333;color:#eee;border-radius:4px;font-family:monospace">
+<button onclick="fetch('/import?link='+encodeURIComponent(document.getElementById('zalink').value)).then(r=>r.text()).then(t=>{alert(t);location.reload()})" style="padding:8px 16px;background:#0f3460;color:#fff;border:none;border-radius:4px;cursor:pointer">导入</button>
+</div>
 </div></body></html>`,
 			map[bool]string{true: "on", false: "off"}[status == "运行中"],
 			status,
@@ -135,7 +143,43 @@ func (s *simpleHTTP) serve(conn net.Conn) {
 		return
 	}
 
-	body := s.routes["/"]()
+	req := string(buf[:n])
+	path := "/"
+	if len(req) > 4 {
+		parts := strings.SplitN(req, " ", 3)
+		if len(parts) >= 2 {
+			path = parts[1]
+		}
+	}
+
+	// Handle ZA link import
+	if strings.HasPrefix(path, "/import?link=") {
+		zaLink := strings.TrimPrefix(path, "/import?link=")
+		// URL decode
+		zaLink = strings.ReplaceAll(zaLink, "%3A", ":")
+		zaLink = strings.ReplaceAll(zaLink, "%2F", "/")
+		lc, err := link.Parse(zaLink, "")
+		var body string
+		if err != nil {
+			body = "导入失败: " + err.Error()
+		} else {
+			guiConfig.RemoteHost = lc.Host
+			guiConfig.RemotePort = lc.Port
+			guiConfig.UserHash = lc.UserHash
+			guiConfig.SmartPort = fmt.Sprintf("127.0.0.1:%d", lc.SmartPort)
+			guiConfig.GlobalPort = fmt.Sprintf("127.0.0.1:%d", lc.GlobalPort)
+			body = fmt.Sprintf("导入成功: %s:%d", lc.Host, lc.Port)
+		}
+		resp := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s", len(body), body)
+		conn.Write([]byte(resp))
+		return
+	}
+
+	handler, ok := s.routes[path]
+	if !ok {
+		handler = s.routes["/"]
+	}
+	body := handler()
 	resp := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s", len(body), body)
 	conn.Write([]byte(resp))
 }
