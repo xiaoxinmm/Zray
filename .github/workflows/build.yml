@@ -59,30 +59,17 @@ jobs:
       - name: Tidy modules
         run: go mod tidy
 
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        id: setup-ndk
-        with:
-          ndk-version: r26d
-
       - name: Build Android arm64 binary
         run: |
           mkdir -p build
-          CGO_ENABLED=0 GOOS=android GOARCH=arm64 \
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
             go build -ldflags="-s -w" -o build/zray-client-android-arm64 ./cmd/zray-client/
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-
-      - name: Build Android x86_64 binary
-        run: |
-          CGO_ENABLED=0 GOOS=android GOARCH=amd64 \
-            go build -ldflags="-s -w" -o build/zray-client-android-amd64 ./cmd/zray-client/
 
       - name: Package
         run: |
           cp configs/client.example.json build/config.json
           cp rules/geosite-cn.txt build/geosite-cn.txt
-          cd build && tar czf zray-android.tar.gz zray-client-android-* config.json geosite-cn.txt
+          cd build && tar czf zray-android.tar.gz zray-client-android-arm64 config.json geosite-cn.txt
 
       - uses: actions/upload-artifact@v4
         with:
