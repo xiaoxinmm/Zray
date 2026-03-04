@@ -1,0 +1,3 @@
+#!/bin/bash
+# Gradle wrapper stub - CI will use system gradle
+exec gradle "$@"
