@@ -21,24 +21,14 @@ jobs:
         run: go mod tidy
 
       - name: Build Windows CLI client
-        run: |
-          go build -ldflags="-s -w" -o build/zray-client.exe ./cmd/zray-client/
+        run: go build -ldflags="-s -w" -o build/zray-client.exe ./cmd/zray-client/
         env:
           CGO_ENABLED: 0
           GOOS: windows
           GOARCH: amd64
 
       - name: Build Windows GUI client
-        run: |
-          go build -ldflags="-s -w -H windowsgui" -o build/zray-gui.exe ./cmd/zray-gui/
-        env:
-          CGO_ENABLED: 0
-          GOOS: windows
-          GOARCH: amd64
-
-      - name: Build Windows Server
-        run: |
-          go build -ldflags="-s -w" -o build/zray-server.exe ./cmd/zray-server/
+        run: go build -ldflags="-s -w -H windowsgui" -o build/zray-gui.exe ./cmd/zray-gui/
         env:
           CGO_ENABLED: 0
           GOOS: windows
@@ -46,9 +36,8 @@ jobs:
 
       - name: Package
         run: |
-          cd build
-          copy ..\configs\client.example.json config.json
-          copy ..\rules\geosite-cn.txt geosite-cn.txt
+          copy configs\client.example.json build\config.json
+          copy rules\geosite-cn.txt build\geosite-cn.txt
 
       - uses: actions/upload-artifact@v4
         with:
@@ -56,7 +45,6 @@ jobs:
           path: |
             build/zray-client.exe
             build/zray-gui.exe
-            build/zray-server.exe
             build/config.json
             build/geosite-cn.txt
 
@@ -68,33 +56,38 @@ jobs:
         with:
           go-version: '1.24'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Tidy modules
+        run: go mod tidy
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          ndk-version: r26d
 
-      - name: Install gomobile
+      - name: Build Android arm64 binary
         run: |
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          go install golang.org/x/mobile/cmd/gobind@latest
-          export PATH=$PATH:$(go env GOPATH)/bin
-          gomobile init
+          mkdir -p build
+          CGO_ENABLED=0 GOOS=android GOARCH=arm64 \
+            go build -ldflags="-s -w" -o build/zray-client-android-arm64 ./cmd/zray-client/
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 
-      - name: Build Android AAR
+      - name: Build Android x86_64 binary
         run: |
-          export PATH=$PATH:$(go env GOPATH)/bin
-          cd android/zraylib
-          go mod tidy
-          gomobile bind -target=android/arm64 -androidapi 24 -o ../../build/zraylib.aar .
+          CGO_ENABLED=0 GOOS=android GOARCH=amd64 \
+            go build -ldflags="-s -w" -o build/zray-client-android-amd64 ./cmd/zray-client/
+
+      - name: Package
+        run: |
+          cp configs/client.example.json build/config.json
+          cp rules/geosite-cn.txt build/geosite-cn.txt
+          cd build && tar czf zray-android.tar.gz zray-client-android-* config.json geosite-cn.txt
 
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: build/zraylib.aar
+          path: build/zray-android.tar.gz
 
   release:
     needs: [build-windows, build-android]
@@ -108,12 +101,12 @@ jobs:
       - name: Package Windows
         run: |
           cd artifacts/windows
-          zip -r ../../ZRay-Windows-v${{ github.ref_name }}.zip .
+          zip -r ../../ZRay-Windows.zip .
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ZRay-Windows-*.zip
-            artifacts/android/zraylib.aar
+            ZRay-Windows.zip
+            artifacts/android/zray-android.tar.gz
           generate_release_notes: true
