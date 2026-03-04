@@ -92,7 +92,7 @@
                 <Border Style="{StaticResource CardBorder}">
                     <StackPanel>
                         <TextBlock Text="服务器配置" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,0,0,10"
-                                   FontWeight="SemiBold" CharacterSpacing="80"/>
+                                   FontWeight="SemiBold"/>
                         <TextBox x:Name="TxtServer" Style="{StaticResource InputBox}" Margin="0,0,0,8">
                             <TextBox.Tag>服务器地址</TextBox.Tag>
                         </TextBox>
@@ -111,7 +111,7 @@
                 <Border Style="{StaticResource CardBorder}">
                     <StackPanel>
                         <TextBlock Text="ZA 链接导入" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,0,0,10"
-                                   FontWeight="SemiBold" CharacterSpacing="80"/>
+                                   FontWeight="SemiBold"/>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
