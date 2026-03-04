@@ -13,38 +13,50 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
 
-      - name: Tidy modules
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Tidy Go modules
         run: go mod tidy
 
-      - name: Build Windows CLI client
+      - name: Build Go core (zray-client.exe)
         run: go build -ldflags="-s -w" -o build/zray-client.exe ./cmd/zray-client/
         env:
           CGO_ENABLED: 0
           GOOS: windows
           GOARCH: amd64
 
-      - name: Build Windows GUI client
-        run: go build -ldflags="-s -w -H windowsgui" -o build/zray-gui.exe ./cmd/zray-gui/
+      - name: Build Go server
+        run: go build -ldflags="-s -w" -o build/zray-server.exe ./cmd/zray-server/
         env:
           CGO_ENABLED: 0
           GOOS: windows
           GOARCH: amd64
 
+      - name: Build WPF GUI
+        run: |
+          cd gui/ZRayClient
+          dotnet publish -c Release -r win-x64 --self-contained false -o ../../build/gui
+
       - name: Package
         run: |
           copy configs\client.example.json build\config.json
           copy rules\geosite-cn.txt build\geosite-cn.txt
+          copy build\gui\ZRay.exe build\ZRay-GUI.exe
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
             build/zray-client.exe
-            build/zray-gui.exe
+            build/zray-server.exe
+            build/ZRay-GUI.exe
             build/config.json
             build/geosite-cn.txt
 
@@ -57,7 +69,7 @@ jobs:
         with:
           path: artifacts
 
-      - name: Package Windows
+      - name: Package
         run: |
           cd artifacts/windows
           zip -r ../../ZRay-Windows.zip .

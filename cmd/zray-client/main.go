@@ -14,6 +14,7 @@ import (
 	"time"
 
 	utls "github.com/refraction-networking/utls"
+	"github.com/xiaoxinmm/Zray/pkg/api"
 	"github.com/xiaoxinmm/Zray/pkg/camo"
 	"github.com/xiaoxinmm/Zray/pkg/link"
 	"github.com/xiaoxinmm/Zray/pkg/protocol"
@@ -44,12 +45,6 @@ type Config struct {
 var (
 	config       Config
 	router       *routing.Router
-	uploadBytes  int64
-	downloadBytes int64
-	activeConns  int64
-	totalConns   int64
-	directConns  int64
-	proxyConns   int64
 )
 
 func main() {
@@ -91,6 +86,18 @@ func main() {
 
 	printBanner()
 
+	// 注册 API 统计
+	api.SmartPort = config.SmartPort
+	api.GlobalPort = config.GlobalPort
+	api.RemoteHost = config.RemoteHost
+	api.RemotePort = config.RemotePort
+	atomic.StoreInt32(&api.IsRunning, 1)
+
+	// 启动 HTTP API (供 GUI 调用)
+	if err := api.StartAPI(18790); err != nil {
+		log.Printf("[WARN] API 启动失败: %v", err)
+	}
+
 	// 启动两个 SOCKS5 端口
 	go startSocks5(config.SmartPort, false)  // 分流模式
 	go startSocks5(config.GlobalPort, true)  // 全局代理模式
@@ -119,8 +126,8 @@ func startSocks5(addr string, forceProxy bool) {
 
 func handleSocks5(c net.Conn, forceProxy bool) {
 	defer c.Close()
-	atomic.AddInt64(&activeConns, 1)
-	defer atomic.AddInt64(&activeConns, -1)
+	atomic.AddInt64(&api.ActiveConns, 1)
+	defer atomic.AddInt64(&api.ActiveConns, -1)
 
 	c.SetDeadline(time.Now().Add(10 * time.Second))
 
@@ -188,12 +195,12 @@ func handleSocks5(c net.Conn, forceProxy bool) {
 
 	if action == routing.ActionDirect {
 		// Direct connection
-		atomic.AddInt64(&directConns, 1)
+		atomic.AddInt64(&api.DirectConns, 1)
 		handleDirect(c, targetAddr)
 	} else {
 		// Proxy through ZRay
-		atomic.AddInt64(&proxyConns, 1)
-		atomic.AddInt64(&totalConns, 1)
+		atomic.AddInt64(&api.ProxiedConns, 1)
+		atomic.AddInt64(&api.ProxiedConns, 1)
 		handleProxy(c, targetAddr, atyp, destBytes)
 	}
 }
@@ -242,8 +249,8 @@ func handleProxy(c net.Conn, target string, atyp byte, destBytes []byte) {
 
 	// Relay
 	up, down := proxy.Relay(c, svr)
-	atomic.AddInt64(&uploadBytes, up)
-	atomic.AddInt64(&downloadBytes, down)
+	atomic.AddInt64(&api.UploadBytes, up)
+	atomic.AddInt64(&api.DownloadBytes, down)
 }
 
 func dialServer() (net.Conn, error) {
@@ -306,11 +313,11 @@ func monitorStats() {
 	idx := 0
 
 	for range ticker.C {
-		up := atomic.LoadInt64(&uploadBytes)
-		down := atomic.LoadInt64(&downloadBytes)
-		conns := atomic.LoadInt64(&activeConns)
-		direct := atomic.LoadInt64(&directConns)
-		proxied := atomic.LoadInt64(&proxyConns)
+		up := atomic.LoadInt64(&api.UploadBytes)
+		down := atomic.LoadInt64(&api.DownloadBytes)
+		conns := atomic.LoadInt64(&api.ActiveConns)
+		direct := atomic.LoadInt64(&api.DirectConns)
+		proxied := atomic.LoadInt64(&api.ProxiedConns)
 
 		fmt.Printf("\r%s %s↑%s %s↓%s | ⚡%-3d | 🎯D:%-4d P:%-4d",
 			spinner[idx],
