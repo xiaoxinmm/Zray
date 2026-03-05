@@ -193,7 +193,18 @@ namespace ZRayClient
             base.OnStateChanged(e);
         }
 
-        protected override void OnClosed(EventArgs e) { StopCore(); base.OnClosed(e); }
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            StopCore();
+            base.OnClosing(e);
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            StopCore();
+            System.Windows.Application.Current.Shutdown();
+            base.OnClosed(e);
+        }
 
         static void Show(string msg) => System.Windows.MessageBox.Show(msg, "ZRay");
 
