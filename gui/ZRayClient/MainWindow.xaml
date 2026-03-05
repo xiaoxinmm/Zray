@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wpfui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="ZRay" Height="580" Width="420"
+        Icon="Assets/icon.png"
         WindowStartupLocation="CenterScreen"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica">

@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Wpf.Ui.Controls;
+using H.NotifyIcon;
 
 namespace ZRayClient
 {
@@ -16,20 +17,62 @@ namespace ZRayClient
         private readonly HttpClient _http = new();
         private readonly DispatcherTimer _timer;
         private bool _isConnected;
+        private TaskbarIcon? _trayIcon;
         private const string API = "http://127.0.0.1:18790";
         private const string CORE = "zray-client.exe";
         private const string REPO = "xiaoxinmm/Zray";
-        private string _ver = "2.3.0";
+        private const string VERSION = "2.3.3";
 
         public MainWindow()
         {
             InitializeComponent();
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _timer.Tick += OnTick;
+            Title = $"ZRay v{VERSION}";
+            InitTrayIcon();
             LoadConfig();
             CheckUpdateAsync();
         }
 
+        // === System Tray ===
+        private void InitTrayIcon()
+        {
+            _trayIcon = new TaskbarIcon
+            {
+                ToolTipText = $"ZRay v{VERSION}",
+                IconSource = new System.Windows.Media.Imaging.BitmapImage(
+                    new Uri("pack://application:,,,/Assets/icon.png")),
+                Visibility = Visibility.Visible,
+                ContextMenu = CreateTrayMenu(),
+            };
+            _trayIcon.TrayLeftMouseDown += (s, e) => ShowWindow();
+        }
+
+        private System.Windows.Controls.ContextMenu CreateTrayMenu()
+        {
+            var menu = new System.Windows.Controls.ContextMenu();
+
+            var showItem = new System.Windows.Controls.MenuItem { Header = "显示主窗口" };
+            showItem.Click += (s, e) => ShowWindow();
+            menu.Items.Add(showItem);
+
+            menu.Items.Add(new System.Windows.Controls.Separator());
+
+            var exitItem = new System.Windows.Controls.MenuItem { Header = "退出" };
+            exitItem.Click += (s, e) => { StopCore(); _trayIcon?.Dispose(); Application.Current.Shutdown(); };
+            menu.Items.Add(exitItem);
+
+            return menu;
+        }
+
+        private void ShowWindow()
+        {
+            Show();
+            WindowState = WindowState.Normal;
+            Activate();
+        }
+
+        // === Connection ===
         private void OnToggleConnect(object sender, RoutedEventArgs e)
         {
             if (_isConnected) StopCore(); else StartCore();
@@ -58,6 +101,7 @@ namespace ZRayClient
                 _coreProcess.Start();
                 SetOn();
                 _timer.Start();
+                if (_trayIcon != null) _trayIcon.ToolTipText = $"ZRay v{VERSION} - 已连接";
             }
             catch (Exception ex) { Show("启动失败: " + ex.Message); }
         }
@@ -68,6 +112,7 @@ namespace ZRayClient
             try { if (_coreProcess is { HasExited: false }) { _coreProcess.Kill(); _coreProcess.WaitForExit(3000); } } catch { }
             _coreProcess = null;
             SetOff();
+            if (_trayIcon != null) _trayIcon.ToolTipText = $"ZRay v{VERSION} - 未连接";
         }
 
         private void SetOn()
@@ -93,6 +138,7 @@ namespace ZRayClient
             TxtServer.IsEnabled = true; TxtPort.IsEnabled = true; TxtHash.IsEnabled = true;
         }
 
+        // === Stats ===
         private async void OnTick(object? s, EventArgs e)
         {
             try
@@ -112,6 +158,7 @@ namespace ZRayClient
 
         static string Fmt(long b) => b >= 1048576 ? $"{b / 1048576.0:F1} MB/s" : b >= 1024 ? $"{b / 1024.0:F1} KB/s" : $"{b} B/s";
 
+        // === ZA Link Import ===
         private void OnImportLink(object sender, RoutedEventArgs e)
         {
             var za = TxtZALink.Text.Trim();
@@ -119,7 +166,6 @@ namespace ZRayClient
             { Show("请输入 ZA:// 链接"); return; }
             try
             {
-                // 调用核心解密链接并写入config.json
                 var core = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, CORE);
                 var proc = new Process
                 {
@@ -128,15 +174,11 @@ namespace ZRayClient
                         FileName = core,
                         Arguments = $"--link \"{za}\"",
                         WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
-                        CreateNoWindow = true,
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
+                        CreateNoWindow = true, UseShellExecute = false,
+                        RedirectStandardOutput = true, RedirectStandardError = true,
                     }
                 };
                 proc.Start();
-                // 核心会解密ZA链接→覆盖config.json→然后启动代理
-                // 我们只需要等它写完config就行，3秒后杀掉
                 System.Threading.Thread.Sleep(2000);
                 if (!proc.HasExited) proc.Kill();
                 LoadConfig();
@@ -146,6 +188,7 @@ namespace ZRayClient
             catch (Exception ex) { Show("导入失败: " + ex.Message); }
         }
 
+        // === Update Check ===
         private async void CheckUpdateAsync()
         {
             try
@@ -154,20 +197,33 @@ namespace ZRayClient
                 var j = await _http.GetStringAsync($"https://api.github.com/repos/{REPO}/releases/latest");
                 var doc = JsonDocument.Parse(j);
                 var tag = doc.RootElement.GetProperty("tag_name").GetString()?.TrimStart('v') ?? "";
-                if (!string.IsNullOrEmpty(tag) && string.Compare(tag, _ver, StringComparison.Ordinal) > 0)
+                if (!string.IsNullOrEmpty(tag) && string.Compare(tag, VERSION, StringComparison.Ordinal) > 0)
                 {
                     var url = doc.RootElement.GetProperty("html_url").GetString() ?? "";
-                    if (System.Windows.MessageBox.Show($"新版本 v{tag} 可用，是否下载？", "更新", System.Windows.MessageBoxButton.YesNo) == System.Windows.MessageBoxResult.Yes)
+                    if (System.Windows.MessageBox.Show($"新版本 v{tag} 可用\n当前 v{VERSION}\n\n是否下载？", "ZRay 更新",
+                        System.Windows.MessageBoxButton.YesNo) == System.Windows.MessageBoxResult.Yes)
                         Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
                 }
             }
             catch { }
         }
 
+        // === Config ===
         private void SaveConfig()
         {
-            var cfg = new { smart_port = $"127.0.0.1:{SmartPortText.Text.Trim()}", global_port = $"127.0.0.1:{GlobalPortText.Text.Trim()}", remote_host = TxtServer.Text.Trim(), remote_port = int.TryParse(TxtPort.Text.Trim(), out var p) ? p : 64433, user_hash = TxtHash.Text.Trim(), enable_tfo = false, geosite_path = "rules/geosite-cn.txt" };
-            File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json"), JsonSerializer.Serialize(cfg, new JsonSerializerOptions { WriteIndented = true }));
+            var cfg = new
+            {
+                smart_port = $"127.0.0.1:{SmartPortText.Text.Trim()}",
+                global_port = $"127.0.0.1:{GlobalPortText.Text.Trim()}",
+                remote_host = TxtServer.Text.Trim(),
+                remote_port = int.TryParse(TxtPort.Text.Trim(), out var p) ? p : 64433,
+                user_hash = TxtHash.Text.Trim(),
+                enable_tfo = false,
+                geosite_path = "rules/geosite-cn.txt"
+            };
+            File.WriteAllText(
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json"),
+                JsonSerializer.Serialize(cfg, new JsonSerializerOptions { WriteIndented = true }));
         }
 
         private void LoadConfig()
@@ -187,22 +243,27 @@ namespace ZRayClient
             catch { }
         }
 
+        // === Window Lifecycle ===
         protected override void OnStateChanged(EventArgs e)
         {
-            if (WindowState == WindowState.Minimized) Hide();
+            if (WindowState == WindowState.Minimized)
+            {
+                Hide(); // 最小化到托盘
+            }
             base.OnStateChanged(e);
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
             StopCore();
+            _trayIcon?.Dispose();
             base.OnClosing(e);
         }
 
         protected override void OnClosed(EventArgs e)
         {
             StopCore();
-            System.Windows.Application.Current.Shutdown();
+            Application.Current.Shutdown();
             base.OnClosed(e);
         }
 
