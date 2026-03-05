@@ -5,8 +5,7 @@
         Title="ZRay" Height="580" Width="420"
         Icon="Assets/icon.png"
         WindowStartupLocation="CenterScreen"
-        ExtendsContentIntoTitleBar="True"
-        WindowBackdropType="Mica">
+        ExtendsContentIntoTitleBar="True">
 
     <Grid>
         <Grid.RowDefinitions>

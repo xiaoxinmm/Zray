@@ -25,27 +25,49 @@ namespace ZRayClient
 
         public MainWindow()
         {
-            InitializeComponent();
-            _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-            _timer.Tick += OnTick;
-            Title = $"ZRay v{VERSION}";
-            InitTrayIcon();
-            LoadConfig();
-            CheckUpdateAsync();
+            try
+            {
+                InitializeComponent();
+                _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+                _timer.Tick += OnTick;
+                Title = $"ZRay v{VERSION}";
+                InitTrayIcon();
+                LoadConfig();
+                CheckUpdateAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"初始化失败: {ex}", "ZRay 错误");
+            }
         }
 
         // === System Tray ===
         private void InitTrayIcon()
         {
-            _trayIcon = new TaskbarIcon
+            try
             {
-                ToolTipText = $"ZRay v{VERSION}",
-                IconSource = new System.Windows.Media.Imaging.BitmapImage(
-                    new Uri("pack://application:,,,/Assets/icon.png")),
-                Visibility = Visibility.Visible,
-                ContextMenu = CreateTrayMenu(),
-            };
-            _trayIcon.TrayLeftMouseDown += (s, e) => ShowWindow();
+                _trayIcon = new TaskbarIcon
+                {
+                    ToolTipText = $"ZRay v{VERSION}",
+                    Visibility = Visibility.Visible,
+                    ContextMenu = CreateTrayMenu(),
+                };
+
+                // 尝试加载图标
+                try
+                {
+                    _trayIcon.IconSource = new System.Windows.Media.Imaging.BitmapImage(
+                        new Uri("pack://application:,,,/Assets/icon.png"));
+                }
+                catch { }
+
+                _trayIcon.TrayLeftMouseDown += (s, e) => ShowWindow();
+            }
+            catch (Exception ex)
+            {
+                // 托盘失败不影响主程序
+                System.Diagnostics.Debug.WriteLine($"托盘初始化失败: {ex.Message}");
+            }
         }
 
         private System.Windows.Controls.ContextMenu CreateTrayMenu()
