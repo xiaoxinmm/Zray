@@ -81,7 +81,7 @@ func main() {
 			Port:     config.RemotePort,
 			UserHash: config.UserHash,
 		}
-		zaLink, err := link.Generate(lc, "")
+		zaLink, err := link.GenerateBinary(lc, "")
 		if err == nil {
 			log.Println("--------------------------------------------------")
 			log.Printf("[LINK] ZA 分享链接:")

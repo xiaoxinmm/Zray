@@ -1,6 +1,4 @@
-using System.Windows;
-
 namespace ZRayClient
 {
-    public partial class App : Application { }
+    public partial class App : System.Windows.Application { }
 }
