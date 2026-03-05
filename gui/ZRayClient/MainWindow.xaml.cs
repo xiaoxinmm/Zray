@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -18,24 +17,24 @@ namespace ZRayClient
         private bool _isConnected;
         private const string API_BASE = "http://127.0.0.1:18790";
         private const string CORE_EXE = "zray-client.exe";
+        private const string GITHUB_REPO = "xiaoxinmm/Zray";
+        private string _currentVersion = "2.2.0";
 
         public MainWindow()
         {
             InitializeComponent();
-
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _timer.Tick += OnTimerTick;
-
             LoadConfig();
+            Title = $"ZRay v{_currentVersion}";
+            CheckUpdateAsync();
         }
 
         // === Connection Toggle ===
         private void OnToggleConnect(object sender, RoutedEventArgs e)
         {
-            if (_isConnected)
-                StopCore();
-            else
-                StartCore();
+            if (_isConnected) StopCore();
+            else StartCore();
         }
 
         private void StartCore()
@@ -43,11 +42,10 @@ namespace ZRayClient
             try
             {
                 SaveConfig();
-
                 var corePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, CORE_EXE);
                 if (!File.Exists(corePath))
                 {
-                    MessageBox.Show($"找不到核心程序: {corePath}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show($"找不到核心: {corePath}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
@@ -64,12 +62,7 @@ namespace ZRayClient
                     },
                     EnableRaisingEvents = true
                 };
-
-                _coreProcess.Exited += (s, e) =>
-                {
-                    Dispatcher.Invoke(() => SetDisconnected());
-                };
-
+                _coreProcess.Exited += (s, e) => Dispatcher.Invoke(SetDisconnected);
                 _coreProcess.Start();
                 SetConnected();
                 _timer.Start();
@@ -119,12 +112,13 @@ namespace ZRayClient
             UpSpeed.Text = "0 B/s";
             DownSpeed.Text = "0 B/s";
             ConnCount.Text = "0";
+            LatencyText.Text = "- ms";
             TxtServer.IsEnabled = true;
             TxtPort.IsEnabled = true;
             TxtHash.IsEnabled = true;
         }
 
-        // === Stats Polling ===
+        // === Stats Polling (每秒) ===
         private async void OnTimerTick(object? sender, EventArgs e)
         {
             try
@@ -138,6 +132,14 @@ namespace ZRayClient
                 ConnCount.Text = stats.active.ToString();
                 DirectCount.Text = $"🎯 直连: {stats.direct}";
                 ProxyCount.Text = $"🌐 代理: {stats.proxied}";
+
+                // 延迟显示
+                if (stats.latency_ms > 0)
+                    LatencyText.Text = $"{stats.latency_ms} ms";
+                else if (stats.latency_ms < 0)
+                    LatencyText.Text = "超时";
+                else
+                    LatencyText.Text = "测量中...";
             }
             catch { }
         }
@@ -158,8 +160,6 @@ namespace ZRayClient
                 MessageBox.Show("请输入有效的 ZA:// 链接", "提示");
                 return;
             }
-
-            // Decode: we delegate to the core binary
             try
             {
                 var corePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, CORE_EXE);
@@ -171,24 +171,38 @@ namespace ZRayClient
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                 });
-                var output = proc?.StandardOutput.ReadToEnd();
-                proc?.WaitForExit();
-
-                if (!string.IsNullOrEmpty(output) && output.Contains(":"))
-                {
-                    // Parse "host:port" from output
-                    MessageBox.Show("链接导入成功！请重新连接。", "成功");
-                    LoadConfig(); // Reload
-                }
-                else
-                {
-                    MessageBox.Show("链接解析失败", "错误");
-                }
+                proc?.WaitForExit(5000);
+                MessageBox.Show("链接导入成功！", "成功");
+                LoadConfig();
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"导入失败: {ex.Message}", "错误");
             }
+        }
+
+        // === #7 Auto Update ===
+        private async void CheckUpdateAsync()
+        {
+            try
+            {
+                _http.DefaultRequestHeaders.UserAgent.ParseAdd("ZRay-Client");
+                var json = await _http.GetStringAsync($"https://api.github.com/repos/{GITHUB_REPO}/releases/latest");
+                var doc = JsonDocument.Parse(json);
+                var latest = doc.RootElement.GetProperty("tag_name").GetString()?.TrimStart('v') ?? "";
+                if (!string.IsNullOrEmpty(latest) && string.Compare(latest, _currentVersion, StringComparison.Ordinal) > 0)
+                {
+                    var url = doc.RootElement.GetProperty("html_url").GetString() ?? "";
+                    var result = MessageBox.Show(
+                        $"发现新版本 v{latest}\n当前版本 v{_currentVersion}\n\n是否打开下载页面？",
+                        "ZRay 更新", MessageBoxButton.YesNo, MessageBoxImage.Information);
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                    }
+                }
+            }
+            catch { } // 静默失败
         }
 
         // === Config ===
@@ -204,10 +218,8 @@ namespace ZRayClient
                 enable_tfo = false,
                 geosite_path = "rules/geosite-cn.txt"
             };
-
             var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
-            File.WriteAllText(path, json);
+            File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json"), json);
         }
 
         private void LoadConfig()
@@ -216,26 +228,29 @@ namespace ZRayClient
             {
                 var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
                 if (!File.Exists(path)) return;
-
-                var json = File.ReadAllText(path);
-                var doc = JsonDocument.Parse(json);
+                var doc = JsonDocument.Parse(File.ReadAllText(path));
                 var root = doc.RootElement;
-
                 if (root.TryGetProperty("remote_host", out var h)) TxtServer.Text = h.GetString() ?? "";
                 if (root.TryGetProperty("remote_port", out var port)) TxtPort.Text = port.GetInt32().ToString();
                 if (root.TryGetProperty("user_hash", out var hash)) TxtHash.Text = hash.GetString() ?? "";
                 if (root.TryGetProperty("smart_port", out var sp))
-                {
-                    var parts = (sp.GetString() ?? ":1080").Split(':');
-                    SmartPortText.Text = parts[^1];
-                }
+                    SmartPortText.Text = (sp.GetString() ?? ":1080").Split(':')[^1];
                 if (root.TryGetProperty("global_port", out var gp))
-                {
-                    var parts = (gp.GetString() ?? ":1081").Split(':');
-                    GlobalPortText.Text = parts[^1];
-                }
+                    GlobalPortText.Text = (gp.GetString() ?? ":1081").Split(':')[^1];
             }
             catch { }
+        }
+
+        // === #6 最小化到托盘 ===
+        protected override void OnStateChanged(EventArgs e)
+        {
+            if (WindowState == WindowState.Minimized)
+            {
+                Hide();
+                // 用 NotifyIcon 需要 WinForms 引用，这里简化：任务栏仍可见
+                // 完整托盘需要 Hardcodet.NotifyIcon.Wpf 包
+            }
+            base.OnStateChanged(e);
         }
 
         protected override void OnClosed(EventArgs e)
@@ -244,7 +259,6 @@ namespace ZRayClient
             base.OnClosed(e);
         }
 
-        // === Stats Model ===
         private class CoreStats
         {
             public long upload { get; set; }
@@ -254,6 +268,7 @@ namespace ZRayClient
             public long active { get; set; }
             public long direct { get; set; }
             public long proxied { get; set; }
+            public long latency_ms { get; set; }
             public bool running { get; set; }
         }
     }

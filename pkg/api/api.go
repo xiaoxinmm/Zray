@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"sync/atomic"
+	"time"
 )
 
 // Stats holds runtime statistics exposed to the UI.
@@ -18,6 +19,7 @@ type Stats struct {
 	Active      int64  `json:"active"`
 	Direct      int64  `json:"direct"`
 	Proxied     int64  `json:"proxied"`
+	Latency     int64  `json:"latency_ms"`
 	SmartPort   string `json:"smart_port"`
 	GlobalPort  string `json:"global_port"`
 	RemoteHost  string `json:"remote_host"`
@@ -31,6 +33,7 @@ var (
 	ActiveConns   int64
 	DirectConns   int64
 	ProxiedConns  int64
+	LatencyMs     int64
 	LastUpload    int64
 	LastDownload  int64
 	IsRunning     int32
@@ -63,6 +66,7 @@ func GetStats() *Stats {
 		Active:     atomic.LoadInt64(&ActiveConns),
 		Direct:     atomic.LoadInt64(&DirectConns),
 		Proxied:    atomic.LoadInt64(&ProxiedConns),
+		Latency:    atomic.LoadInt64(&LatencyMs),
 		SmartPort:  SmartPort,
 		GlobalPort: GlobalPort,
 		RemoteHost: RemoteHost,
@@ -98,10 +102,35 @@ func StartAPI(port int) error {
 		w.Write([]byte("ok"))
 	})
 
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		ms := atomic.LoadInt64(&LatencyMs)
+		fmt.Fprintf(w, "%d", ms)
+	})
+
 	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		return err
 	}
 	go http.Serve(ln, mux)
 	return nil
+}
+
+// StartLatencyProbe periodically measures TCP latency to the remote server.
+func StartLatencyProbe(host string, port int, interval time.Duration) {
+	go func() {
+		for {
+			addr := fmt.Sprintf("%s:%d", host, port)
+			start := time.Now()
+			conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+			if err == nil {
+				ms := time.Since(start).Milliseconds()
+				atomic.StoreInt64(&LatencyMs, ms)
+				conn.Close()
+			} else {
+				atomic.StoreInt64(&LatencyMs, -1)
+			}
+			time.Sleep(interval)
+		}
+	}()
 }

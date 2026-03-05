@@ -32,21 +32,27 @@
                                 <ColumnDefinition/>
                                 <ColumnDefinition/>
                                 <ColumnDefinition/>
+                                <ColumnDefinition/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" HorizontalAlignment="Center">
                                 <TextBlock Text="↑ 上传" Foreground="{StaticResource TextSecondary}" FontSize="11" HorizontalAlignment="Center"/>
-                                <TextBlock x:Name="UpSpeed" Text="0 B/s" FontSize="16" FontWeight="Bold"
+                                <TextBlock x:Name="UpSpeed" Text="0 B/s" FontSize="15" FontWeight="Bold"
                                            Foreground="{StaticResource AccentGreen}" HorizontalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" HorizontalAlignment="Center">
                                 <TextBlock Text="↓ 下载" Foreground="{StaticResource TextSecondary}" FontSize="11" HorizontalAlignment="Center"/>
-                                <TextBlock x:Name="DownSpeed" Text="0 B/s" FontSize="16" FontWeight="Bold"
+                                <TextBlock x:Name="DownSpeed" Text="0 B/s" FontSize="15" FontWeight="Bold"
                                            Foreground="#00B4D8" HorizontalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Grid.Column="2" HorizontalAlignment="Center">
                                 <TextBlock Text="⚡ 连接" Foreground="{StaticResource TextSecondary}" FontSize="11" HorizontalAlignment="Center"/>
-                                <TextBlock x:Name="ConnCount" Text="0" FontSize="16" FontWeight="Bold"
+                                <TextBlock x:Name="ConnCount" Text="0" FontSize="15" FontWeight="Bold"
                                            Foreground="{StaticResource AccentRed}" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                <TextBlock Text="📡 延迟" Foreground="{StaticResource TextSecondary}" FontSize="11" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="LatencyText" Text="- ms" FontSize="15" FontWeight="Bold"
+                                           Foreground="#FFA500" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Grid>
 

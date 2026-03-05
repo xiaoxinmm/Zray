@@ -3,5 +3,6 @@
     "user_hash": "1234567890abcdef",
     "cert_file": "/etc/zray/server.crt",
     "key_file": "/etc/zray/server.key",
-    "enable_tfo": false
+    "enable_tfo": false,
+    "admin_port": 18800
 }

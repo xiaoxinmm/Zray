@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/xiaoxinmm/Zray/pkg/admin"
 	"github.com/xiaoxinmm/Zray/pkg/camo"
 	"github.com/xiaoxinmm/Zray/pkg/link"
 	"github.com/xiaoxinmm/Zray/pkg/protocol"
@@ -27,6 +28,7 @@ type Config struct {
 	CertFile   string `json:"cert_file"`
 	KeyFile    string `json:"key_file"`
 	EnableTFO  bool   `json:"enable_tfo"`
+	AdminPort  int    `json:"admin_port"`
 }
 
 var (
@@ -87,6 +89,17 @@ func main() {
 		}
 	}
 	log.Println("--------------------------------------------------")
+
+	// 启动 Web 管理面板
+	adminPort := config.AdminPort
+	if adminPort == 0 {
+		adminPort = 18800
+	}
+	if err := admin.StartAdmin(adminPort); err != nil {
+		log.Printf("[WARN] Admin 面板启动失败: %v", err)
+	} else {
+		log.Printf("[INFO] Admin 面板: http://0.0.0.0:%d", adminPort)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

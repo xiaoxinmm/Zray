@@ -98,6 +98,9 @@ func main() {
 		log.Printf("[WARN] API 启动失败: %v", err)
 	}
 
+	// 启动延迟探测
+	api.StartLatencyProbe(config.RemoteHost, config.RemotePort, 10*time.Second)
+
 	// 启动两个 SOCKS5 端口
 	go startSocks5(config.SmartPort, false)  // 分流模式
 	go startSocks5(config.GlobalPort, true)  // 全局代理模式

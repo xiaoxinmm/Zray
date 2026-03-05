@@ -157,3 +157,16 @@ GitHub Actions 会自动编译所有平台版本并发布 Release。
 ## 协议
 
 MIT License
+
+## Changelog
+
+### v2.2.0
+- C# WPF 原生桌面客户端（暗色主题）
+- 实时速度/连接数/延迟显示
+- 自动检测 GitHub 新版本
+- 最小化到后台
+- ZA:// 加密链接一键导入
+- 服务端 Web 管理面板 (:18800)
+- 流量混淆模块 (pkg/obfs)
+- Linux amd64/arm64 服务端编译
+- Go 核心 HTTP API (:18790)
