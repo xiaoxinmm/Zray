@@ -17,7 +17,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/xiaoxinmm/Zray/pkg/admin"
 	"github.com/xiaoxinmm/Zray/pkg/camo"
 	"github.com/xiaoxinmm/Zray/pkg/link"
 	"github.com/xiaoxinmm/Zray/pkg/protocol"
@@ -29,7 +28,6 @@ type Config struct {
 	CertFile   string `json:"cert_file"`
 	KeyFile    string `json:"key_file"`
 	EnableTFO  bool   `json:"enable_tfo"`
-	AdminPort  int    `json:"admin_port"`
 }
 
 var (
@@ -69,10 +67,11 @@ func main() {
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
 
 	log.Println("==================================================")
-	log.Println("           ZRay Server v2.1                       ")
+	log.Println("           ZRay Server v2.3")
 	log.Println("==================================================")
 	log.Printf("[INFO] 监听端口: %d", config.RemotePort)
 	log.Printf("[INFO] TFO: %v", config.EnableTFO)
+	log.Printf("[INFO] TLS: 已启用")
 
 	// 生成 ZA 链接
 	publicIP := getPublicIP()
@@ -90,17 +89,6 @@ func main() {
 		}
 	}
 	log.Println("--------------------------------------------------")
-
-	// 启动 Web 管理面板
-	adminPort := config.AdminPort
-	if adminPort == 0 {
-		adminPort = 18800
-	}
-	if err := admin.StartAdmin(adminPort); err != nil {
-		log.Printf("[WARN] Admin 面板启动失败: %v", err)
-	} else {
-		log.Printf("[INFO] Admin 面板: http://0.0.0.0:%d", adminPort)
-	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -143,7 +131,6 @@ func startListener(ctx context.Context, tlsConfig *tls.Config) {
 			case <-ctx.Done():
 				return
 			default:
-				log.Printf("[WARN] Accept: %v", err)
 				continue
 			}
 		}
@@ -158,19 +145,16 @@ func handleConnection(conn net.Conn) {
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	br := bufio.NewReader(conn)
 
-	// Strip HTTP camouflage
 	if err := camo.StripHTTPCamo(br); err != nil {
 		return
 	}
 
-	// Parse protocol header
 	hdr, err := protocol.ParseHeader(br, config.UserHash, 30)
 	if err != nil {
 		log.Printf("[SEC] %s: %v", addr, err)
 		return
 	}
 
-	// Check nonce replay
 	if _, loaded := nonceCache.LoadOrStore(hdr.Nonce, hdr.Time); loaded {
 		log.Printf("[SEC] 重放攻击: %s", addr)
 		return
@@ -179,7 +163,6 @@ func handleConnection(conn net.Conn) {
 	conn.SetReadDeadline(time.Time{})
 	log.Printf("[AUTH] 验证通过: %s", addr)
 
-	// Read padding
 	padBuf := make([]byte, 1)
 	if _, err := io.ReadFull(br, padBuf); err != nil {
 		return
@@ -188,7 +171,6 @@ func handleConnection(conn net.Conn) {
 		io.ReadFull(br, make([]byte, padBuf[0]))
 	}
 
-	// Read command
 	cmdBuf := make([]byte, 1)
 	if _, err := io.ReadFull(br, cmdBuf); err != nil {
 		return

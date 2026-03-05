@@ -34,6 +34,8 @@ var (
 	DirectConns   int64
 	ProxiedConns  int64
 	LatencyMs     int64
+	UpSpeed       int64
+	DownSpeed     int64
 	LastUpload    int64
 	LastDownload  int64
 	IsRunning     int32
@@ -61,8 +63,8 @@ func GetStats() *Stats {
 	return &Stats{
 		Upload:     up,
 		Download:   down,
-		UpSpeed:    upSpeed,
-		DownSpeed:  downSpeed,
+		UpSpeed:    atomic.LoadInt64(&UpSpeed),
+		DownSpeed:  atomic.LoadInt64(&DownSpeed),
 		Active:     atomic.LoadInt64(&ActiveConns),
 		Direct:     atomic.LoadInt64(&DirectConns),
 		Proxied:    atomic.LoadInt64(&ProxiedConns),

@@ -119,9 +119,29 @@ namespace ZRayClient
             { Show("请输入 ZA:// 链接"); return; }
             try
             {
+                // 调用核心解密链接并写入config.json
                 var core = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, CORE);
-                Process.Start(new ProcessStartInfo { FileName = core, Arguments = $"--link \"{za}\" --dry-run", CreateNoWindow = true, UseShellExecute = false })?.WaitForExit(5000);
-                Show("导入成功"); LoadConfig();
+                var proc = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = core,
+                        Arguments = $"--link \"{za}\"",
+                        WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
+                        CreateNoWindow = true,
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                    }
+                };
+                proc.Start();
+                // 核心会解密ZA链接→覆盖config.json→然后启动代理
+                // 我们只需要等它写完config就行，3秒后杀掉
+                System.Threading.Thread.Sleep(2000);
+                if (!proc.HasExited) proc.Kill();
+                LoadConfig();
+                Show($"导入成功: {TxtServer.Text}:{TxtPort.Text}");
+                TxtZALink.Text = "";
             }
             catch (Exception ex) { Show("导入失败: " + ex.Message); }
         }

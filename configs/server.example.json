@@ -1,8 +1,7 @@
 {
     "remote_port": 64433,
-    "user_hash": "1234567890abcdef",
+    "user_hash": "your_secret_hash",
     "cert_file": "/etc/zray/server.crt",
     "key_file": "/etc/zray/server.key",
-    "enable_tfo": false,
-    "admin_port": 18800
+    "enable_tfo": false
 }
