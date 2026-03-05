@@ -137,7 +137,7 @@ namespace ZRayClient
                 if (!string.IsNullOrEmpty(tag) && string.Compare(tag, _ver, StringComparison.Ordinal) > 0)
                 {
                     var url = doc.RootElement.GetProperty("html_url").GetString() ?? "";
-                    if (System.Windows.MessageBox.Show($"新版本 v{tag} 可用，是否下载？", "更新", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                    if (System.Windows.MessageBox.Show($"新版本 v{tag} 可用，是否下载？", "更新", System.Windows.MessageBoxButton.YesNo) == System.Windows.MessageBoxResult.Yes)
                         Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
                 }
             }
