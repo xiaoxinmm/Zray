@@ -75,7 +75,7 @@ jobs:
       - name: Build WPF GUI
         run: |
           cd gui/ZRayClient
-          dotnet publish -c Release -r win-x64 --self-contained false -o ../../build/gui
+          dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ../../build/gui
 
       - name: Package
         run: |
