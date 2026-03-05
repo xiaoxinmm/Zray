@@ -57,7 +57,7 @@ namespace ZRayClient
                 try
                 {
                     _trayIcon.IconSource = new System.Windows.Media.Imaging.BitmapImage(
-                        new Uri("pack://application:,,,/Assets/icon.png"));
+                        new Uri("pack://application:,,,/Assets/icon.ico"));
                 }
                 catch { }
 
