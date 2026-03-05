@@ -143,3 +143,7 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 ## 协议
 
 MIT
+
+## 相关项目
+
+- [Zray for Android](https://github.com/xiaoxinmm/Zray-for-Android) — Android 客户端（Material Design 3）
