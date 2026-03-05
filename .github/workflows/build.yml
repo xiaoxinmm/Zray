@@ -81,7 +81,7 @@ jobs:
         run: |
           copy configs\client.example.json build\config.json
           copy rules\geosite-cn.txt build\geosite-cn.txt
-          copy build\gui\ZRay.exe build\ZRay-GUI.exe
+          copy build\gui\ZRay-GUI.exe build\ZRay-GUI.exe
 
       - uses: actions/upload-artifact@v4
         with:
