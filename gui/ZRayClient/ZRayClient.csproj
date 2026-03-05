@@ -5,7 +5,6 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>ZRayClient</RootNamespace>
     <AssemblyName>ZRay-GUI</AssemblyName>
-    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
   <ItemGroup>
