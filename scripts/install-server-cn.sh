@@ -1,164 +1,122 @@
+cat << 'EOF' > install-zray.sh && bash install-zray.sh
 #!/bin/bash
-# ZRay Server 安装脚本 - 国内环境 (使用镜像加速)
-set -e
 
-COLOR_GREEN='\033[32m'
-COLOR_YELLOW='\033[33m'
-COLOR_RED='\033[31m'
-COLOR_RESET='\033[0m'
+echo "========================================="
+echo " ZRay Server 自动化安装部署脚本 (修复加强版)"
+echo "========================================="
 
-info()  { echo -e "${COLOR_GREEN}[INFO]${COLOR_RESET} $1"; }
-warn()  { echo -e "${COLOR_YELLOW}[WARN]${COLOR_RESET} $1"; }
-error() { echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} $1"; exit 1; }
+# 1. 架构检测与变量设置
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|amd64)
+        OS_ARCH="amd64"
+        FILE_NAME="zray-linux-amd64.tar.gz"
+        ;;
+    aarch64|arm64)
+        OS_ARCH="arm64"
+        FILE_NAME="zray-linux-arm64.tar.gz"
+        ;;
+    *)
+        echo "[ERROR] 不支持的架构: $ARCH"
+        exit 1
+        ;;
+esac
+echo "[INFO] 检测到架构: linux/$OS_ARCH"
 
-INSTALL_DIR="/etc/zray"
-BIN_DIR="/usr/local/bin"
-SERVICE_NAME="zray-server"
-REPO="xiaoxinmm/Zray"
-PORT=${ZRAY_PORT:-64433}
-USER_HASH=${ZRAY_HASH:-$(head -c 8 /dev/urandom | xxd -p)}
+# 2. 稳定获取最新版本号
+echo "[INFO] 正在获取 ZRay 最新版本号..."
+LATEST_URL=$(curl -Ls -o /dev/null -w %{url_effective} https://github.com/xiaoxinmm/Zray/releases/latest)
+LATEST_VERSION=${LATEST_URL##*/}
 
-# 国内 GitHub 镜像列表
-MIRRORS=(
-    "https://ghproxy.cc/https://github.com"
-    "https://gh-proxy.com/https://github.com"
-    "https://mirror.ghproxy.com/https://github.com"
-    "https://github.com"
-)
+if [ -z "$LATEST_VERSION" ] || [[ "$LATEST_VERSION" == "latest" ]]; then
+    echo "[ERROR] 无法获取最新版本号，可能遭遇网络阻断。"
+    exit 1
+fi
+echo "[INFO] 锁定最新版本: $LATEST_VERSION"
 
-check_root() {
-    [ "$(id -u)" -eq 0 ] || error "请使用 root 用户运行"
-}
+# 3. 安全下载到临时目录
+DOWNLOAD_URL="https://github.com/xiaoxinmm/Zray/releases/download/${LATEST_VERSION}/${FILE_NAME}"
+echo "[INFO] 正在下载: $DOWNLOAD_URL"
+curl -sL -o "/tmp/${FILE_NAME}" "$DOWNLOAD_URL"
 
-detect_arch() {
-    case "$(uname -m)" in
-        x86_64|amd64) ARCH="amd64" ;;
-        aarch64|arm64) ARCH="arm64" ;;
-        armv7*) ARCH="armv7" ;;
-        *) error "不支持的架构: $(uname -m)" ;;
-    esac
-    OS="linux"
-    info "检测到架构: ${OS}/${ARCH}"
-}
+# 4. 强校验文件
+if ! gzip -t "/tmp/${FILE_NAME}" 2>/dev/null; then
+    echo "[ERROR] 下载失败！拉取到的文件不是合法的压缩包。"
+    rm -f "/tmp/${FILE_NAME}"
+    exit 1
+fi
 
-try_download() {
-    local path="$1"
-    local output="$2"
-    for mirror in "${MIRRORS[@]}"; do
-        local url="${mirror}/${path}"
-        info "尝试下载: ${url}"
-        if curl -sL --connect-timeout 10 --max-time 120 "$url" -o "$output" 2>/dev/null; then
-            if [ -s "$output" ]; then
-                info "下载成功"
-                return 0
-            fi
-        fi
-        warn "镜像不可用，尝试下一个..."
-    done
-    error "所有镜像均不可用"
-}
+# 5. 解压与部署
+INSTALL_DIR="/usr/local/zray"
+echo "[INFO] 校验通过，正在部署到 $INSTALL_DIR ..."
+mkdir -p $INSTALL_DIR
+tar -xzf "/tmp/${FILE_NAME}" -C $INSTALL_DIR
+rm -f "/tmp/${FILE_NAME}"
 
-install_binary() {
-    info "下载 ZRay Server (国内加速)..."
-    
-    # 尝试获取最新版本
-    LATEST="v2.0.0"
-    for mirror in "${MIRRORS[@]}"; do
-        VER=$(curl -sL --connect-timeout 5 "${mirror/github.com/api.github.com\/repos}/${REPO}/releases/latest" 2>/dev/null | grep -oP '"tag_name":\s*"v[^"]+' | grep -oP 'v[^"]+')
-        if [ -n "$VER" ]; then
-            LATEST="$VER"
-            break
-        fi
-    done
-    info "版本: ${LATEST}"
-    
-    TMP=$(mktemp -d)
-    try_download "${REPO}/releases/download/${LATEST}/zray-server-${OS}-${ARCH}.tar.gz" "${TMP}/zray.tar.gz"
-    tar xzf "${TMP}/zray.tar.gz" -C "${TMP}"
-    
-    install -m 755 "${TMP}/zray-server" "${BIN_DIR}/zray-server"
-    rm -rf "$TMP"
-    info "二进制安装完成"
-}
+cd $INSTALL_DIR
+chmod +x zray-server-linux-$OS_ARCH
 
-generate_cert() {
-    info "生成 TLS 证书..."
-    mkdir -p "$INSTALL_DIR"
-    openssl req -x509 -newkey rsa:2048 -keyout "${INSTALL_DIR}/server.key" \
-        -out "${INSTALL_DIR}/server.crt" -days 3650 -nodes \
-        -subj "/CN=ZRay/O=ZRay Corp" 2>/dev/null
-    chmod 600 "${INSTALL_DIR}/server.key"
-    info "证书已生成"
-}
+# 6. 生成证书
+if [ ! -f "server.crt" ]; then
+    echo "[INFO] 正在生成 TLS 自签证书..."
+    openssl req -x509 -newkey rsa:2048 -keyout server.key -out server.crt -days 3650 -nodes -subj "/CN=ZRay" 2>/dev/null
+fi
 
-generate_config() {
-    info "生成配置文件..."
-    cat > "${INSTALL_DIR}/config.json" <<EOF
+# 7. 自动化生成配置文件
+echo "[INFO] 正在初始化默认配置..."
+# 随机生成 16 字节的 hex 字符串作为 UserHash
+RANDOM_HASH=$(openssl rand -hex 16)
+DEFAULT_PORT=64433
+
+# 假设服务端的配置文件名为 server-config.json
+cat << CONF > server-config.json
 {
-    "remote_port": ${PORT},
-    "user_hash": "${USER_HASH}",
-    "cert_file": "${INSTALL_DIR}/server.crt",
-    "key_file": "${INSTALL_DIR}/server.key",
-    "enable_tfo": false
+    "listen_port": $DEFAULT_PORT,
+    "user_hash": "$RANDOM_HASH"
 }
-EOF
-}
+CONF
 
-install_service() {
-    info "安装 systemd 服务..."
-    cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
+# 8. 注册 systemd 守护进程
+echo "[INFO] 正在配置 systemd 守护进程..."
+cat << SYS > /etc/systemd/system/zray.service
 [Unit]
-Description=ZRay Proxy Server
+Description=ZRay Server Proxy Service
 After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=${INSTALL_DIR}
-ExecStart=${BIN_DIR}/zray-server
-Restart=always
-RestartSec=5
-LimitNOFILE=65535
+User=root
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$INSTALL_DIR/zray-server-linux-$OS_ARCH
+Restart=on-failure
+RestartSec=5s
+# 提升网络并发性能的文件句柄限制
+LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
+SYS
+
+# 9. 启动并设置开机自启
+echo "[INFO] 正在启动 ZRay 服务..."
+systemctl daemon-reload
+systemctl enable zray >/dev/null 2>&1
+systemctl restart zray
+
+echo "========================================="
+echo " ZRay 服务端已成功安装并在后台运行！"
+echo "========================================="
+echo "【连接信息】"
+echo " 服务器 IP : $(curl -s ifconfig.me)"
+echo " 监听端口  : $DEFAULT_PORT"
+echo " 认证密钥  : $RANDOM_HASH"
+echo "========================================="
+echo "【常用管理命令】"
+echo " 查看状态: systemctl status zray"
+echo " 查看日志: journalctl -u zray -f"
+echo " 重启服务: systemctl restart zray"
+echo " 停止服务: systemctl stop zray"
+echo " 修改配置: nano $INSTALL_DIR/server-config.json"
+echo "========================================="
 EOF
-    systemctl daemon-reload
-    systemctl enable ${SERVICE_NAME}
-    systemctl start ${SERVICE_NAME}
-    info "服务已启动"
-}
-
-show_info() {
-    PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s ip.sb 2>/dev/null || echo "unknown")
-    echo ""
-    echo "========================================"
-    echo " ZRay Server 安装完成! (国内版)"
-    echo "========================================"
-    echo " 服务器地址: ${PUBLIC_IP}"
-    echo " 端口: ${PORT}"
-    echo " UserHash: ${USER_HASH}"
-    echo " 配置目录: ${INSTALL_DIR}"
-    echo ""
-    echo " 客户端配置:"
-    cat <<EOF
- {
-   "remote_host": "${PUBLIC_IP}",
-   "remote_port": ${PORT},
-   "user_hash": "${USER_HASH}"
- }
-EOF
-    echo "========================================"
-}
-
-main() {
-    info "ZRay Server 安装脚本 (国内版)"
-    check_root
-    detect_arch
-    install_binary
-    generate_cert
-    generate_config
-    install_service
-    show_info
-}
-
-main "$@"
